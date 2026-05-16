@@ -4,12 +4,14 @@ import { pathToFileURL } from "node:url";
 import type Database from "better-sqlite3";
 import { openDatabase, countImages } from "./db";
 import { Library } from "./library";
-import type { AppInfo, ImageUserMeta } from "../shared/ipc";
+import { SettingsStore } from "./settings";
+import type { AppInfo, ImageUserMeta, Settings, SolverKind } from "../shared/ipc";
 
 const isDev = !app.isPackaged;
 
 let db: Database.Database | null = null;
 let library: Library | null = null;
+let settings: SettingsStore | null = null;
 
 function dbPath(): string {
   return join(app.getPath("userData"), "zenithstack.db");
@@ -47,6 +49,7 @@ function createWindow() {
 app.whenReady().then(async () => {
   db = openDatabase(dbPath());
   library = new Library(db, libraryDir());
+  settings = new SettingsStore(db);
   await library.init();
 
   const libRoot = normalize(libraryDir() + sep);
@@ -98,6 +101,26 @@ app.whenReady().then(async () => {
   ipcMain.handle("images:resolveTargets", (_e, id: number) =>
     library!.resolveTargetsForImage(id),
   );
+
+  ipcMain.handle("settings:get", () => settings!.get());
+  ipcMain.handle("settings:set", (_e, partial: Partial<Settings>) =>
+    settings!.set(partial),
+  );
+  ipcMain.handle("dialog:pickBinary", async () => {
+    const res = await dialog.showOpenDialog({
+      title: "Select solver binary",
+      properties: ["openFile"],
+    });
+    return res.canceled ? null : res.filePaths[0];
+  });
+  ipcMain.handle("images:solve", async (_e, id: number, kind?: SolverKind) => {
+    const cfg = settings!.get();
+    const chosen = kind ?? cfg.preferredSolver;
+    const bin =
+      chosen === "astap" ? cfg.astapBinPath : cfg.astrometryBinPath;
+    if (!bin) throw new Error(`${chosen} binary path is not configured`);
+    return library!.solveImage(id, chosen, bin);
+  });
 
   createWindow();
 

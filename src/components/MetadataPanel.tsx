@@ -47,6 +47,8 @@ export function MetadataPanel({
   const [form, setForm] = useState<FormState>(() => metaToForm(detail));
   const [saving, setSaving] = useState(false);
   const [resolving, setResolving] = useState(false);
+  const [solving, setSolving] = useState(false);
+  const [solveError, setSolveError] = useState<string | null>(null);
 
   useEffect(() => {
     setForm(metaToForm(detail));
@@ -127,6 +129,24 @@ export function MetadataPanel({
           <dt>Solver</dt>
           <dd>{detail.solver ?? "—"}</dd>
         </dl>
+        <button
+          onClick={async () => {
+            setSolveError(null);
+            setSolving(true);
+            try {
+              await window.zenith.plateSolve(detail.id);
+              await onSaved();
+            } catch (e) {
+              setSolveError((e as Error).message);
+            } finally {
+              setSolving(false);
+            }
+          }}
+          disabled={solving}
+        >
+          {solving ? "Plate solving…" : detail.solver ? "Re-solve" : "Plate solve"}
+        </button>
+        {solveError && <pre className="error">{solveError}</pre>}
       </section>
 
       <section>

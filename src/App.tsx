@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import type { AppInfo } from "../shared/ipc";
 import { Library } from "./views/Library";
 import { SkyPlot } from "./views/SkyPlot";
+import { SettingsModal } from "./components/SettingsModal";
 
 type Tab = "library" | "sky" | "planner" | "analytics";
 
 export function App() {
   const [tab, setTab] = useState<Tab>("library");
   const [info, setInfo] = useState<AppInfo | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     window.zenith.getAppInfo().then(setInfo);
@@ -26,7 +28,9 @@ export function App() {
         <span className="muted spacer">
           {info ? `${info.imageCount} images · v${info.appVersion}` : ""}
         </span>
+        <button className="tab" onClick={() => setSettingsOpen(true)}>Settings</button>
       </header>
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
       <main>
         {tab === "library" && <Library />}
         {tab === "sky" && <SkyPlot />}

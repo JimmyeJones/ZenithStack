@@ -58,6 +58,14 @@ export type ImportResult = {
   errors: { path: string; message: string }[];
 };
 
+export type Settings = {
+  astapBinPath: string | null;
+  astrometryBinPath: string | null;
+  preferredSolver: "astap" | "astrometry-net";
+};
+
+export type SolverKind = "astap" | "astrometry-net";
+
 export interface ZenithApi {
   getAppInfo(): Promise<AppInfo>;
   pickImageFiles(): Promise<string[]>;
@@ -68,6 +76,10 @@ export interface ZenithApi {
   updateImageNotes(id: number, notes: string | null): Promise<void>;
   deleteImage(id: number): Promise<void>;
   resolveTargets(id: number): Promise<TargetRow[]>;
+  getSettings(): Promise<Settings>;
+  saveSettings(partial: Partial<Settings>): Promise<Settings>;
+  pickBinary(): Promise<string | null>;
+  plateSolve(id: number, kind?: SolverKind): Promise<ImageRow>;
 }
 
 declare global {

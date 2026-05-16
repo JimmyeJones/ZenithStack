@@ -14,6 +14,7 @@ import type {
 import { readFitsHeader, renderFitsThumbnail, parseFitsRaDec } from "./fits";
 import { solutionFromHeader, footprintToGeoJSON } from "./wcs";
 import { Simbad } from "./simbad";
+import { solve, SolverError, type SolverHint, type SolverKind } from "./solver";
 
 const RASTER_EXT = new Set([".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"]);
 const FITS_EXT = new Set([".fit", ".fits", ".fts"]);
@@ -145,6 +146,61 @@ export class Library {
       );
 
     const id = Number(result.lastInsertRowid);
+    return this.getRow(id)!;
+  }
+
+  async solveImage(
+    id: number,
+    kind: SolverKind,
+    binPath: string,
+    hint: SolverHint = {},
+  ): Promise<ImageRow> {
+    const row = this.getRow(id);
+    if (!row) throw new Error("image not found");
+
+    const seedHint: SolverHint = {
+      raDeg: hint.raDeg ?? row.raDeg ?? undefined,
+      decDeg: hint.decDeg ?? row.decDeg ?? undefined,
+      radiusDeg: hint.radiusDeg,
+      fovDeg: hint.fovDeg ?? row.fovWDeg ?? undefined,
+    };
+
+    let result;
+    try {
+      result = await solve(kind, binPath, row.libraryPath, seedHint);
+    } catch (e) {
+      if (e instanceof SolverError) throw e;
+      throw new SolverError((e as Error).message, "");
+    }
+
+    const naxis1 = result.naxis1 || row.widthPx || 0;
+    const naxis2 = result.naxis2 || row.heightPx || 0;
+    const sol = solutionFromHeader(result.header, naxis1, naxis2);
+    if (!sol) {
+      throw new SolverError("solver succeeded but WCS could not be parsed", result.log);
+    }
+
+    this.db
+      .prepare(
+        `UPDATE images SET
+           ra_deg = ?, dec_deg = ?, fov_w_deg = ?, fov_h_deg = ?,
+           rotation_deg = ?, pixel_scale_arcsec = ?, footprint_geojson = ?,
+           solver = ?, solved_at = ?
+         WHERE id = ?`,
+      )
+      .run(
+        sol.raDeg,
+        sol.decDeg,
+        sol.fovWDeg,
+        sol.fovHDeg,
+        sol.rotationDeg,
+        sol.pixelScaleArcsec,
+        footprintToGeoJSON(sol.footprint),
+        kind,
+        new Date().toISOString(),
+        id,
+      );
+
     return this.getRow(id)!;
   }
 
