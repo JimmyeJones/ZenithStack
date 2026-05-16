@@ -15,6 +15,7 @@ const api: ZenithApi = {
   saveSettings: (partial) => ipcRenderer.invoke("settings:set", partial),
   pickBinary: () => ipcRenderer.invoke("dialog:pickBinary"),
   plateSolve: (id, kind) => ipcRenderer.invoke("images:solve", id, kind),
+  getAnalytics: () => ipcRenderer.invoke("analytics:get"),
 };
 
 contextBridge.exposeInMainWorld("zenith", api);

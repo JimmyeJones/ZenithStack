@@ -5,6 +5,7 @@ import type Database from "better-sqlite3";
 import { openDatabase, countImages } from "./db";
 import { Library } from "./library";
 import { SettingsStore } from "./settings";
+import { AnalyticsStore } from "./analytics";
 import type { AppInfo, ImageUserMeta, Settings, SolverKind } from "../shared/ipc";
 
 const isDev = !app.isPackaged;
@@ -12,6 +13,7 @@ const isDev = !app.isPackaged;
 let db: Database.Database | null = null;
 let library: Library | null = null;
 let settings: SettingsStore | null = null;
+let analytics: AnalyticsStore | null = null;
 
 function dbPath(): string {
   return join(app.getPath("userData"), "zenithstack.db");
@@ -50,6 +52,7 @@ app.whenReady().then(async () => {
   db = openDatabase(dbPath());
   library = new Library(db, libraryDir());
   settings = new SettingsStore(db);
+  analytics = new AnalyticsStore(db);
   await library.init();
 
   const libRoot = normalize(libraryDir() + sep);
@@ -113,6 +116,7 @@ app.whenReady().then(async () => {
     });
     return res.canceled ? null : res.filePaths[0];
   });
+  ipcMain.handle("analytics:get", () => analytics!.compute());
   ipcMain.handle("images:solve", async (_e, id: number, kind?: SolverKind) => {
     const cfg = settings!.get();
     const chosen = kind ?? cfg.preferredSolver;

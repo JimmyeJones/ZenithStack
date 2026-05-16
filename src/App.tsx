@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AppInfo } from "../shared/ipc";
 import { Library } from "./views/Library";
 import { SkyPlot } from "./views/SkyPlot";
+import { Analytics } from "./views/Analytics";
 import { SettingsModal } from "./components/SettingsModal";
 
 type Tab = "library" | "sky" | "planner" | "analytics";
@@ -35,7 +36,7 @@ export function App() {
         {tab === "library" && <Library />}
         {tab === "sky" && <SkyPlot />}
         {tab === "planner" && <Placeholder label="Night planner — milestone 7" />}
-        {tab === "analytics" && <Placeholder label="Analytics — milestone 6" />}
+        {tab === "analytics" && <Analytics />}
       </main>
     </div>
   );
