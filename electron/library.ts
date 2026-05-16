@@ -15,6 +15,8 @@ import { readFitsHeader, renderFitsThumbnail, parseFitsRaDec } from "./fits";
 import { solutionFromHeader, footprintToGeoJSON } from "./wcs";
 import { Simbad } from "./simbad";
 import { solve, SolverError, type SolverHint, type SolverKind } from "./solver";
+import { scanFolder, type ScanResult, type ScannerSite } from "./rawScanner";
+import type { RawSessionSummary } from "../shared/ipc";
 
 const RASTER_EXT = new Set([".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"]);
 const FITS_EXT = new Set([".fit", ".fits", ".fts"]);
@@ -347,6 +349,48 @@ export class Library {
 
   delete(id: number) {
     this.db.prepare("DELETE FROM images WHERE id = ?").run(id);
+  }
+
+  async linkRawFolder(
+    imageId: number,
+    folder: string,
+    site: ScannerSite | null,
+  ): Promise<ScanResult> {
+    return scanFolder(this.db, imageId, folder, site);
+  }
+
+  unlinkRawSession(sessionId: number): void {
+    this.db.prepare("DELETE FROM raw_sessions WHERE id = ?").run(sessionId);
+  }
+
+  rawSessions(imageId: number): RawSessionSummary[] {
+    const rows = this.db
+      .prepare(
+        `SELECT rs.id, rs.folder_path, rs.scanned_at, rs.frame_count,
+                COALESCE(SUM(rf.exposure_s), 0) AS total_exposure_s,
+                SUM(CASE WHEN rf.rejected = 1 THEN 1 ELSE 0 END) AS rejected_count
+         FROM raw_sessions rs
+         LEFT JOIN raw_frames rf ON rf.session_id = rs.id
+         WHERE rs.image_id = ?
+         GROUP BY rs.id
+         ORDER BY rs.scanned_at DESC`,
+      )
+      .all(imageId) as {
+      id: number;
+      folder_path: string;
+      scanned_at: string | null;
+      frame_count: number | null;
+      total_exposure_s: number;
+      rejected_count: number;
+    }[];
+    return rows.map((r) => ({
+      id: r.id,
+      folderPath: r.folder_path,
+      scannedAt: r.scanned_at,
+      frameCount: r.frame_count ?? 0,
+      totalExposureS: r.total_exposure_s,
+      rejectedCount: r.rejected_count,
+    }));
   }
 }
 

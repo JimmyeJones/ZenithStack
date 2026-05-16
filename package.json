@@ -48,8 +48,23 @@
     "directories": {
       "buildResources": "resources"
     },
-    "mac": { "target": "dmg" },
-    "win": { "target": "nsis" },
-    "linux": { "target": ["AppImage", "deb"] }
+    "extraResources": [
+      { "from": "resources/icon.png", "to": "icon.png" }
+    ],
+    "mac": { "target": "dmg", "icon": "resources/icon.png" },
+    "win": { "target": "nsis", "icon": "resources/icon.png" },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "icon": "resources/icon.png",
+      "category": "Graphics"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ZenithStack"
+    }
   }
 }

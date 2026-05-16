@@ -1,6 +1,6 @@
 export type AppInfo = {
   appVersion: string;
-  platform: NodeJS.Platform;
+  platform: string;
   dbPath: string;
   libraryDir: string;
   imageCount: number;
@@ -100,6 +100,37 @@ export type Settings = {
 
 export type SolverKind = "astap" | "astrometry-net";
 
+export type RawSessionSummary = {
+  id: number;
+  folderPath: string;
+  scannedAt: string | null;
+  frameCount: number;
+  totalExposureS: number;
+  rejectedCount: number;
+};
+
+export type RawScanResult = {
+  sessionId: number;
+  frameCount: number;
+  rejectedCount: number;
+  errors: { path: string; message: string }[];
+};
+
+export type RawAnalytics = {
+  imagesLinked: number;
+  totalImages: number;
+  totalFrames: number;
+  rejectedFrames: number;
+  totalExposureS: number;
+  fwhmHistogram: { bin: string; count: number }[];
+  eccentricityHistogram: { bin: string; count: number }[];
+  altitudeHistogram: { bin: string; count: number }[];
+  moonSepHistogram: { bin: string; count: number }[];
+  moonPhaseHistogram: { bin: string; count: number }[];
+  filterFrameCount: { filter: string; frames: number; exposureS: number }[];
+  nightsByMonth: { month: string; nights: number; frames: number }[];
+};
+
 export interface ZenithApi {
   getAppInfo(): Promise<AppInfo>;
   pickImageFiles(): Promise<string[]>;
@@ -119,6 +150,11 @@ export interface ZenithApi {
   createSite(site: Omit<SiteRow, "id">): Promise<SiteRow>;
   updateSite(site: SiteRow): Promise<SiteRow>;
   deleteSite(id: number): Promise<void>;
+  pickFolder(): Promise<string | null>;
+  linkRawFolder(imageId: number, folder: string): Promise<RawScanResult>;
+  listRawSessions(imageId: number): Promise<RawSessionSummary[]>;
+  unlinkRawSession(sessionId: number): Promise<void>;
+  getRawAnalytics(): Promise<RawAnalytics>;
 }
 
 declare global {

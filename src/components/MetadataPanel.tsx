@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { ImageDetail, ImageUserMeta } from "../../shared/ipc";
 import { thumbUrl } from "../lib/thumb";
+import { RawSessions } from "./RawSessions";
 
 type FormState = {
   totalIntegrationS: string;
@@ -218,6 +219,8 @@ export function MetadataPanel({
           <textarea value={form.notes} onChange={set("notes")} rows={3} />
         </div>
       </section>
+
+      <RawSessions imageId={detail.id} />
 
       <div className="meta-actions">
         <button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</button>

@@ -16,7 +16,8 @@
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "useDefineForClassFields": true,
-    "noEmit": true
+    "noEmit": true,
+    "types": ["vite/client"]
   },
   "include": ["src", "shared"]
 }

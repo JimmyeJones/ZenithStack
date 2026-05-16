@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { geoPath, geoGraticule } from "d3-geo";
 import { geoAitoff } from "d3-geo-projection";
-import type { Analytics as AnalyticsData } from "../../shared/ipc";
+import type { Analytics as AnalyticsData, RawAnalytics } from "../../shared/ipc";
 import { BarChart, type BarDatum } from "../components/BarChart";
 import { buildFootprintFeature, raToLon } from "../lib/skyGeom";
 
 export function Analytics() {
   const [data, setData] = useState<AnalyticsData | null>(null);
+  const [raw, setRaw] = useState<RawAnalytics | null>(null);
 
   useEffect(() => {
     window.zenith.getAnalytics().then(setData);
+    window.zenith.getRawAnalytics().then(setRaw);
   }, []);
 
   if (!data) return <div className="dashboard"><div className="muted">Loading analytics…</div></div>;
@@ -17,6 +19,7 @@ export function Analytics() {
   return (
     <div className="dashboard">
       <KpiRow data={data} />
+      {raw && <RawCoverageStrip raw={raw} />}
       <CoverageCard data={data} />
       <div className="grid-2">
         <Card title="Top targets">
@@ -70,7 +73,105 @@ export function Analytics() {
           />
         </Card>
       </div>
+
+      {raw && raw.totalFrames > 0 && <RawSections raw={raw} />}
     </div>
+  );
+}
+
+function RawCoverageStrip({ raw }: { raw: RawAnalytics }) {
+  const pct = raw.totalImages > 0 ? (raw.imagesLinked / raw.totalImages) * 100 : 0;
+  return (
+    <div className="raw-strip">
+      <strong>{raw.imagesLinked}</strong> of <strong>{raw.totalImages}</strong> images
+      linked to raws ({pct.toFixed(0)}%) ·{" "}
+      <strong>{raw.totalFrames.toLocaleString()}</strong> subs indexed ·
+      <strong> {(raw.totalExposureS / 3600).toFixed(1)} h</strong> of kept integration
+      {raw.totalImages > raw.imagesLinked && (
+        <span className="muted">
+          {"  "}— link more raw folders on the image detail panel to enable per-frame stats
+        </span>
+      )}
+    </div>
+  );
+}
+
+function RawSections({ raw }: { raw: RawAnalytics }) {
+  const rejectPct =
+    raw.totalFrames > 0 ? (raw.rejectedFrames / raw.totalFrames) * 100 : 0;
+  return (
+    <>
+      <div className="grid-2">
+        <Card title="Frame outcome">
+          <BarChart
+            data={[
+              { label: "Kept", value: raw.totalFrames - raw.rejectedFrames },
+              { label: "Rejected", value: raw.rejectedFrames },
+            ]}
+          />
+          <div className="muted small">
+            {rejectPct.toFixed(1)}% rejected
+          </div>
+        </Card>
+        <Card title="Filter usage (raws)">
+          {raw.filterFrameCount.length > 0 ? (
+            <BarChart
+              data={raw.filterFrameCount.map((f) => ({
+                label: f.filter,
+                value: f.exposureS,
+                sublabel: `× ${f.frames}`,
+              }))}
+              valueFormat={(v) => `${(v / 3600).toFixed(1)} h`}
+            />
+          ) : (
+            <div className="muted">No FILTER headers found in scanned raws.</div>
+          )}
+        </Card>
+      </div>
+      <div className="grid-2">
+        <Card title="FWHM distribution">
+          <BarChart
+            data={raw.fwhmHistogram.map((d) => ({ label: d.bin, value: d.count }))}
+          />
+        </Card>
+        <Card title="Eccentricity">
+          <BarChart
+            data={raw.eccentricityHistogram.map((d) => ({
+              label: d.bin,
+              value: d.count,
+            }))}
+          />
+        </Card>
+      </div>
+      <div className="grid-2">
+        <Card title="Altitude at capture">
+          <BarChart
+            data={raw.altitudeHistogram.map((d) => ({ label: d.bin, value: d.count }))}
+          />
+        </Card>
+        <Card title="Moon separation">
+          <BarChart
+            data={raw.moonSepHistogram.map((d) => ({ label: d.bin, value: d.count }))}
+          />
+        </Card>
+      </div>
+      <div className="grid-2">
+        <Card title="Moon phase at capture">
+          <BarChart
+            data={raw.moonPhaseHistogram.map((d) => ({ label: d.bin, value: d.count }))}
+          />
+        </Card>
+        <Card title="Nights shot by month">
+          <BarChart
+            data={raw.nightsByMonth.map((d) => ({
+              label: d.month,
+              value: d.nights,
+              sublabel: `${d.frames} fr`,
+            }))}
+          />
+        </Card>
+      </div>
+    </>
   );
 }
 

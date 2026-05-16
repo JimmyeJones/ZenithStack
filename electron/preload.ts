@@ -20,6 +20,12 @@ const api: ZenithApi = {
   createSite: (s) => ipcRenderer.invoke("sites:create", s),
   updateSite: (s) => ipcRenderer.invoke("sites:update", s),
   deleteSite: (id) => ipcRenderer.invoke("sites:delete", id),
+  pickFolder: () => ipcRenderer.invoke("dialog:pickFolder"),
+  linkRawFolder: (imageId, folder) =>
+    ipcRenderer.invoke("raw:link", imageId, folder),
+  listRawSessions: (imageId) => ipcRenderer.invoke("raw:list", imageId),
+  unlinkRawSession: (sessionId) => ipcRenderer.invoke("raw:unlink", sessionId),
+  getRawAnalytics: () => ipcRenderer.invoke("analytics:raw"),
 };
 
 contextBridge.exposeInMainWorld("zenith", api);

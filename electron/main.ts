@@ -30,11 +30,19 @@ protocol.registerSchemesAsPrivileged([
   { scheme: "zenith", privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ]);
 
+function iconPath(): string {
+  const dev = join(__dirname, "..", "..", "resources", "icon.png");
+  const prod = join(process.resourcesPath ?? "", "icon.png");
+  return isDev ? dev : prod;
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
     backgroundColor: "#0b0d12",
+    icon: iconPath(),
+    title: "ZenithStack",
     webPreferences: {
       preload: join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -126,6 +134,31 @@ app.whenReady().then(async () => {
   ipcMain.handle("sites:create", (_e, s: Omit<SiteRow, "id">) => sites!.create(s));
   ipcMain.handle("sites:update", (_e, s: SiteRow) => sites!.update(s));
   ipcMain.handle("sites:delete", (_e, id: number) => sites!.delete(id));
+
+  ipcMain.handle("dialog:pickFolder", async () => {
+    const res = await dialog.showOpenDialog({
+      title: "Select raw frames folder",
+      properties: ["openDirectory"],
+    });
+    return res.canceled ? null : res.filePaths[0];
+  });
+
+  ipcMain.handle("raw:link", async (_e, imageId: number, folder: string) => {
+    const userMeta = db!
+      .prepare("SELECT site_id FROM image_user_meta WHERE image_id = ?")
+      .get(imageId) as { site_id: number | null } | undefined;
+    const site = userMeta?.site_id ? sites!.get(userMeta.site_id) : null;
+    return library!.linkRawFolder(imageId, folder, site
+      ? { lat: site.lat, lon: site.lon, elevationM: site.elevationM }
+      : null);
+  });
+  ipcMain.handle("raw:list", (_e, imageId: number) =>
+    library!.rawSessions(imageId),
+  );
+  ipcMain.handle("raw:unlink", (_e, sessionId: number) =>
+    library!.unlinkRawSession(sessionId),
+  );
+  ipcMain.handle("analytics:raw", () => analytics!.computeRaw());
 
   ipcMain.handle("images:solve", async (_e, id: number, kind?: SolverKind) => {
     const cfg = settings!.get();

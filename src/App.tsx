@@ -5,6 +5,7 @@ import { SkyPlot } from "./views/SkyPlot";
 import { Analytics } from "./views/Analytics";
 import { Planner } from "./views/Planner";
 import { SettingsModal } from "./components/SettingsModal";
+import logoUrl from "./assets/logo.png";
 
 type Tab = "library" | "sky" | "planner" | "analytics";
 
@@ -20,7 +21,7 @@ export function App() {
   return (
     <div className="app">
       <header>
-        <h1>ZenithStack</h1>
+        <img src={logoUrl} alt="ZenithStack" className="logo" />
         <nav className="tabs">
           <TabBtn id="library" current={tab} setTab={setTab}>Library</TabBtn>
           <TabBtn id="sky" current={tab} setTab={setTab}>Sky</TabBtn>
