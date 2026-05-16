@@ -58,6 +58,15 @@ export type ImportResult = {
   errors: { path: string; message: string }[];
 };
 
+export type SiteRow = {
+  id: number;
+  name: string;
+  lat: number;
+  lon: number;
+  elevationM: number | null;
+  tz: string | null;
+};
+
 export type Analytics = {
   totals: {
     images: number;
@@ -106,6 +115,10 @@ export interface ZenithApi {
   pickBinary(): Promise<string | null>;
   plateSolve(id: number, kind?: SolverKind): Promise<ImageRow>;
   getAnalytics(): Promise<Analytics>;
+  listSites(): Promise<SiteRow[]>;
+  createSite(site: Omit<SiteRow, "id">): Promise<SiteRow>;
+  updateSite(site: SiteRow): Promise<SiteRow>;
+  deleteSite(id: number): Promise<void>;
 }
 
 declare global {

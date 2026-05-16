@@ -16,6 +16,10 @@ const api: ZenithApi = {
   pickBinary: () => ipcRenderer.invoke("dialog:pickBinary"),
   plateSolve: (id, kind) => ipcRenderer.invoke("images:solve", id, kind),
   getAnalytics: () => ipcRenderer.invoke("analytics:get"),
+  listSites: () => ipcRenderer.invoke("sites:list"),
+  createSite: (s) => ipcRenderer.invoke("sites:create", s),
+  updateSite: (s) => ipcRenderer.invoke("sites:update", s),
+  deleteSite: (id) => ipcRenderer.invoke("sites:delete", id),
 };
 
 contextBridge.exposeInMainWorld("zenith", api);

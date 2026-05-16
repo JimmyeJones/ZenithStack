@@ -3,6 +3,7 @@ import type { AppInfo } from "../shared/ipc";
 import { Library } from "./views/Library";
 import { SkyPlot } from "./views/SkyPlot";
 import { Analytics } from "./views/Analytics";
+import { Planner } from "./views/Planner";
 import { SettingsModal } from "./components/SettingsModal";
 
 type Tab = "library" | "sky" | "planner" | "analytics";
@@ -35,7 +36,7 @@ export function App() {
       <main>
         {tab === "library" && <Library />}
         {tab === "sky" && <SkyPlot />}
-        {tab === "planner" && <Placeholder label="Night planner — milestone 7" />}
+        {tab === "planner" && <Planner />}
         {tab === "analytics" && <Analytics />}
       </main>
     </div>
@@ -57,6 +58,3 @@ function TabBtn({
   );
 }
 
-function Placeholder({ label }: { label: string }) {
-  return <div className="card"><h2>{label}</h2><pre>Coming soon.</pre></div>;
-}
