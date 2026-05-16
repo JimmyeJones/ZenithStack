@@ -10,6 +10,7 @@ const api: ZenithApi = {
   updateImageMeta: (id, meta) => ipcRenderer.invoke("images:updateMeta", id, meta),
   updateImageNotes: (id, notes) => ipcRenderer.invoke("images:updateNotes", id, notes),
   deleteImage: (id) => ipcRenderer.invoke("images:delete", id),
+  resolveTargets: (id) => ipcRenderer.invoke("images:resolveTargets", id),
 };
 
 contextBridge.exposeInMainWorld("zenith", api);

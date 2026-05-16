@@ -22,6 +22,7 @@ export type ImageRow = {
   fovHDeg: number | null;
   rotationDeg: number | null;
   pixelScaleArcsec: number | null;
+  footprintGeoJson: string | null;
   solver: string | null;
   solvedAt: string | null;
   importedAt: string;
@@ -39,7 +40,18 @@ export type ImageUserMeta = {
   palette: string | null;
 };
 
-export type ImageDetail = ImageRow & { userMeta: ImageUserMeta };
+export type TargetRow = {
+  id: number;
+  name: string;
+  raDeg: number | null;
+  decDeg: number | null;
+  type: string | null;
+};
+
+export type ImageDetail = ImageRow & {
+  userMeta: ImageUserMeta;
+  targets: TargetRow[];
+};
 
 export type ImportResult = {
   imported: ImageRow[];
@@ -55,6 +67,7 @@ export interface ZenithApi {
   updateImageMeta(id: number, meta: Partial<ImageUserMeta>): Promise<void>;
   updateImageNotes(id: number, notes: string | null): Promise<void>;
   deleteImage(id: number): Promise<void>;
+  resolveTargets(id: number): Promise<TargetRow[]>;
 }
 
 declare global {

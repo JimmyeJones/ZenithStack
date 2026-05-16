@@ -46,6 +46,7 @@ export function MetadataPanel({
 }) {
   const [form, setForm] = useState<FormState>(() => metaToForm(detail));
   const [saving, setSaving] = useState(false);
+  const [resolving, setResolving] = useState(false);
 
   useEffect(() => {
     setForm(metaToForm(detail));
@@ -113,7 +114,49 @@ export function MetadataPanel({
               ? `${detail.fovWDeg.toFixed(3)}° × ${detail.fovHDeg.toFixed(3)}°`
               : "—"}
           </dd>
+          <dt>Pixel scale</dt>
+          <dd>
+            {detail.pixelScaleArcsec
+              ? `${detail.pixelScaleArcsec.toFixed(2)}"/px`
+              : "—"}
+          </dd>
+          <dt>Rotation</dt>
+          <dd>
+            {detail.rotationDeg != null ? `${detail.rotationDeg.toFixed(1)}°` : "—"}
+          </dd>
+          <dt>Solver</dt>
+          <dd>{detail.solver ?? "—"}</dd>
         </dl>
+      </section>
+
+      <section>
+        <h3>Targets</h3>
+        {detail.targets.length > 0 ? (
+          <ul className="target-list">
+            {detail.targets.map((t) => (
+              <li key={t.id}>
+                <span className="target-name">{t.name}</span>
+                {t.type && <span className="muted"> · {t.type}</span>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="muted">No targets linked yet.</div>
+        )}
+        <button
+          onClick={async () => {
+            setResolving(true);
+            try {
+              await window.zenith.resolveTargets(detail.id);
+              await onSaved();
+            } finally {
+              setResolving(false);
+            }
+          }}
+          disabled={resolving || detail.raDeg == null}
+        >
+          {resolving ? "Resolving…" : "Resolve from sky (SIMBAD)"}
+        </button>
       </section>
 
       <section>

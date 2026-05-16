@@ -76,7 +76,10 @@ app.whenReady().then(async () => {
       title: "Import images",
       properties: ["openFile", "multiSelections"],
       filters: [
-        { name: "Images", extensions: ["png", "jpg", "jpeg", "tif", "tiff", "webp"] },
+        {
+          name: "Images",
+          extensions: ["png", "jpg", "jpeg", "tif", "tiff", "webp", "fit", "fits", "fts"],
+        },
       ],
     });
     return result.canceled ? [] : result.filePaths;
@@ -92,6 +95,9 @@ app.whenReady().then(async () => {
     library!.updateNotes(id, notes),
   );
   ipcMain.handle("images:delete", (_e, id: number) => library!.delete(id));
+  ipcMain.handle("images:resolveTargets", (_e, id: number) =>
+    library!.resolveTargetsForImage(id),
+  );
 
   createWindow();
 

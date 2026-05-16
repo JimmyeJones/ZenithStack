@@ -146,3 +146,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--accent); }
   display: block; font-size: 12px; color: var(--muted); margin-bottom: 2px;
 }
 .meta-actions { display: flex; gap: 8px; }
+
+.target-list { list-style: none; padding: 0; margin: 0 0 8px; font-size: 13px; }
+.target-list li { padding: 2px 0; }
+.target-name { color: var(--accent); }

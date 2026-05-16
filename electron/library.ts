@@ -2,23 +2,32 @@ import type Database from "better-sqlite3";
 import sharp from "sharp";
 import { copyFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { basename, extname, join } from "node:path";
+import { extname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 import type {
   ImageDetail,
   ImageRow,
   ImageUserMeta,
   ImportResult,
+  TargetRow,
 } from "../shared/ipc";
+import { readFitsHeader, renderFitsThumbnail, parseFitsRaDec } from "./fits";
+import { solutionFromHeader, footprintToGeoJSON } from "./wcs";
+import { Simbad } from "./simbad";
 
-const SUPPORTED_EXT = new Set([".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"]);
+const RASTER_EXT = new Set([".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp"]);
+const FITS_EXT = new Set([".fit", ".fits", ".fts"]);
 const THUMB_MAX = 512;
 
 export class Library {
+  private simbad: Simbad;
+
   constructor(
     private db: Database.Database,
     private libraryDir: string,
-  ) {}
+  ) {
+    this.simbad = new Simbad(db);
+  }
 
   async init() {
     await mkdir(join(this.libraryDir, "originals"), { recursive: true });
@@ -44,44 +53,154 @@ export class Library {
   private async importOne(src: string): Promise<ImageRow> {
     if (!existsSync(src)) throw new Error("file not found");
     const ext = extname(src).toLowerCase();
-    if (!SUPPORTED_EXT.has(ext)) {
+    const isFits = FITS_EXT.has(ext);
+    if (!isFits && !RASTER_EXT.has(ext)) {
       throw new Error(`unsupported format: ${ext || "(none)"}`);
     }
 
     const uid = randomUUID();
-    const safeName = `${uid}${ext}`;
-    const destPath = join(this.libraryDir, "originals", safeName);
+    const destPath = join(this.libraryDir, "originals", `${uid}${ext}`);
+    const thumbPath = join(this.libraryDir, "thumbs", `${uid}.jpg`);
     await copyFile(src, destPath);
 
-    const meta = await sharp(destPath).metadata();
-    const thumbName = `${uid}.jpg`;
-    const thumbPath = join(this.libraryDir, "thumbs", thumbName);
-    await sharp(destPath)
-      .resize({
-        width: THUMB_MAX,
-        height: THUMB_MAX,
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: 80 })
-      .toFile(thumbPath);
+    let widthPx: number | null = null;
+    let heightPx: number | null = null;
+    let format: string = ext.slice(1);
+    let wcsFields: WcsFields = {};
+    let dateObs: string | null = null;
+
+    if (isFits) {
+      const info = await readFitsHeader(destPath);
+      widthPx = info.naxis1;
+      heightPx = info.naxis2;
+      format = "fits";
+      dateObs = stringOrNull(info.header.get("DATE-OBS"));
+
+      const sol = solutionFromHeader(info.header, info.naxis1, info.naxis2);
+      if (sol) {
+        wcsFields = {
+          raDeg: sol.raDeg,
+          decDeg: sol.decDeg,
+          fovWDeg: sol.fovWDeg,
+          fovHDeg: sol.fovHDeg,
+          rotationDeg: sol.rotationDeg,
+          pixelScaleArcsec: sol.pixelScaleArcsec,
+          footprintGeoJson: footprintToGeoJSON(sol.footprint),
+          solver: "FITS-WCS",
+          solvedAt: new Date().toISOString(),
+        };
+      } else {
+        const coords = parseFitsRaDec(info.header);
+        if (coords) {
+          wcsFields.raDeg = coords.ra;
+          wcsFields.decDeg = coords.dec;
+        }
+      }
+
+      const rendered = await renderFitsThumbnail(info, destPath, THUMB_MAX);
+      if (rendered) {
+        await sharp(rendered.data, {
+          raw: { width: rendered.width, height: rendered.height, channels: 1 },
+        })
+          .jpeg({ quality: 80 })
+          .toFile(thumbPath);
+      }
+    } else {
+      const meta = await sharp(destPath).metadata();
+      widthPx = meta.width ?? null;
+      heightPx = meta.height ?? null;
+      format = meta.format ?? ext.slice(1);
+      await sharp(destPath)
+        .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: "inside", withoutEnlargement: true })
+        .jpeg({ quality: 80 })
+        .toFile(thumbPath);
+    }
+
+    const thumbExists = existsSync(thumbPath);
 
     const result = this.db
       .prepare(
         `INSERT INTO images
-         (library_path, thumb_path, format, width_px, height_px)
-         VALUES (?, ?, ?, ?, ?)`,
+         (library_path, thumb_path, format, width_px, height_px, date_obs,
+          ra_deg, dec_deg, fov_w_deg, fov_h_deg, rotation_deg, pixel_scale_arcsec,
+          footprint_geojson, solver, solved_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         destPath,
-        thumbPath,
-        meta.format ?? ext.slice(1),
-        meta.width ?? null,
-        meta.height ?? null,
+        thumbExists ? thumbPath : null,
+        format,
+        widthPx,
+        heightPx,
+        dateObs,
+        wcsFields.raDeg ?? null,
+        wcsFields.decDeg ?? null,
+        wcsFields.fovWDeg ?? null,
+        wcsFields.fovHDeg ?? null,
+        wcsFields.rotationDeg ?? null,
+        wcsFields.pixelScaleArcsec ?? null,
+        wcsFields.footprintGeoJson ?? null,
+        wcsFields.solver ?? null,
+        wcsFields.solvedAt ?? null,
       );
 
     const id = Number(result.lastInsertRowid);
     return this.getRow(id)!;
+  }
+
+  async resolveTargetsForImage(id: number): Promise<TargetRow[]> {
+    const row = this.getRow(id);
+    if (!row || row.raDeg == null || row.decDeg == null) return [];
+    const radius =
+      row.fovWDeg && row.fovHDeg
+        ? Math.max(row.fovWDeg, row.fovHDeg) / 2
+        : 0.25;
+    const hits = await this.simbad.coneSearch(row.raDeg, row.decDeg, radius);
+    if (hits.length === 0) return [];
+
+    const insertTarget = this.db.prepare(
+      `INSERT INTO targets (name, ra_deg, dec_deg, type)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(name) DO UPDATE SET
+         ra_deg = excluded.ra_deg,
+         dec_deg = excluded.dec_deg,
+         type = excluded.type
+       RETURNING id`,
+    );
+    const link = this.db.prepare(
+      `INSERT OR IGNORE INTO image_targets (image_id, target_id) VALUES (?, ?)`,
+    );
+    const clearLinks = this.db.prepare(`DELETE FROM image_targets WHERE image_id = ?`);
+
+    const tx = this.db.transaction(() => {
+      clearLinks.run(id);
+      for (const h of hits) {
+        const t = insertTarget.get(h.mainId, h.raDeg, h.decDeg, h.otype) as { id: number };
+        link.run(id, t.id);
+      }
+    });
+    tx();
+
+    return this.getTargets(id);
+  }
+
+  getTargets(id: number): TargetRow[] {
+    const rows = this.db
+      .prepare(
+        `SELECT t.id, t.name, t.ra_deg, t.dec_deg, t.type
+         FROM targets t
+         JOIN image_targets it ON it.target_id = t.id
+         WHERE it.image_id = ?
+         ORDER BY t.name`,
+      )
+      .all(id) as RawTarget[];
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      raDeg: r.ra_deg,
+      decDeg: r.dec_deg,
+      type: r.type,
+    }));
   }
 
   list(): ImageRow[] {
@@ -104,14 +223,17 @@ export class Library {
     const meta = this.db
       .prepare("SELECT * FROM image_user_meta WHERE image_id = ?")
       .get(id) as RawMeta | undefined;
-    return { ...base, userMeta: toUserMeta(meta) };
+    return {
+      ...base,
+      userMeta: toUserMeta(meta),
+      targets: this.getTargets(id),
+    };
   }
 
   updateMeta(id: number, m: Partial<ImageUserMeta>) {
     const existing = this.db
       .prepare("SELECT image_id FROM image_user_meta WHERE image_id = ?")
       .get(id);
-
     const filtersJson = m.filters !== undefined ? JSON.stringify(m.filters) : undefined;
 
     if (!existing) {
@@ -172,6 +294,18 @@ export class Library {
   }
 }
 
+type WcsFields = {
+  raDeg?: number;
+  decDeg?: number;
+  fovWDeg?: number;
+  fovHDeg?: number;
+  rotationDeg?: number;
+  pixelScaleArcsec?: number;
+  footprintGeoJson?: string;
+  solver?: string;
+  solvedAt?: string;
+};
+
 type RawImage = {
   id: number;
   library_path: string;
@@ -188,6 +322,7 @@ type RawImage = {
   fov_h_deg: number | null;
   rotation_deg: number | null;
   pixel_scale_arcsec: number | null;
+  footprint_geojson: string | null;
   solver: string | null;
   solved_at: string | null;
   imported_at: string;
@@ -204,6 +339,14 @@ type RawMeta = {
   bortle: number | null;
   frame_count: number | null;
   palette: string | null;
+};
+
+type RawTarget = {
+  id: number;
+  name: string;
+  ra_deg: number | null;
+  dec_deg: number | null;
+  type: string | null;
 };
 
 function toImageRow(r: RawImage): ImageRow {
@@ -223,6 +366,7 @@ function toImageRow(r: RawImage): ImageRow {
     fovHDeg: r.fov_h_deg,
     rotationDeg: r.rotation_deg,
     pixelScaleArcsec: r.pixel_scale_arcsec,
+    footprintGeoJson: r.footprint_geojson,
     solver: r.solver,
     solvedAt: r.solved_at,
     importedAt: r.imported_at,
@@ -254,4 +398,9 @@ function toUserMeta(r: RawMeta | undefined): ImageUserMeta {
     frameCount: r.frame_count,
     palette: r.palette,
   };
+}
+
+function stringOrNull(v: unknown): string | null {
+  if (v == null) return null;
+  return String(v);
 }
