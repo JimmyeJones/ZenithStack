@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AppInfo } from "../shared/ipc";
 import { Library } from "./views/Library";
+import { SkyPlot } from "./views/SkyPlot";
 
 type Tab = "library" | "sky" | "planner" | "analytics";
 
@@ -28,7 +29,7 @@ export function App() {
       </header>
       <main>
         {tab === "library" && <Library />}
-        {tab === "sky" && <Placeholder label="Sky plot — milestone 4" />}
+        {tab === "sky" && <SkyPlot />}
         {tab === "planner" && <Placeholder label="Night planner — milestone 7" />}
         {tab === "analytics" && <Placeholder label="Analytics — milestone 6" />}
       </main>
